@@ -51,7 +51,8 @@ def download(name: str, version: str, output: Path | None) -> None:
 @click.option("--ref", required=True, help="Git ref (commit, tag, or branch)")
 @click.option("--json-output", "use_json", is_flag=True, help="Output as JSON")
 @click.option("--ignore", multiple=True, help="Extra glob patterns to treat as generated")
-def diff(sdist: Path, repo: str, ref: str, use_json: bool, ignore: tuple[str, ...]) -> None:
+@click.option("--details", is_flag=True, help="Show excluded and generated files")
+def diff(sdist: Path, repo: str, ref: str, use_json: bool, ignore: tuple[str, ...], details: bool) -> None:
     """Compare an sdist tarball against a VCS checkout."""
     import tempfile
 
@@ -64,7 +65,7 @@ def diff(sdist: Path, repo: str, ref: str, use_json: bool, ignore: tuple[str, ..
     if use_json:
         click.echo(json.dumps(report.to_dict(), indent=2))
     else:
-        _print_diff_report(report)
+        _print_diff_report(report, details=details)
 
     if not report.passed:
         sys.exit(1)
@@ -76,7 +77,8 @@ def diff(sdist: Path, repo: str, ref: str, use_json: bool, ignore: tuple[str, ..
 @click.option("--json-output", "use_json", is_flag=True, help="Output as JSON")
 @click.option("--sdist", "sdist_path", type=click.Path(exists=True, path_type=Path), default=None,
               help="Use a pre-downloaded sdist instead of fetching from PyPI")
-def verify(name: str, version: str, use_json: bool, sdist_path: Path | None) -> None:
+@click.option("--details", is_flag=True, help="Show excluded and generated files")
+def verify(name: str, version: str, use_json: bool, sdist_path: Path | None, details: bool) -> None:
     """Full pipeline: resolve, download, and diff a package against its source."""
     result = run_verify(name, version, sdist_path=sdist_path)
 
@@ -89,13 +91,13 @@ def verify(name: str, version: str, use_json: bool, sdist_path: Path | None) -> 
         click.echo(f"Method:     {r.resolution_method}")
         click.echo(f"Verified:   {r.verified}")
         click.echo()
-        _print_diff_report(result.diff_report)
+        _print_diff_report(result.diff_report, details=details)
 
     if not result.diff_report.passed:
         sys.exit(1)
 
 
-def _print_diff_report(report: object) -> None:
+def _print_diff_report(report: object, *, details: bool = False) -> None:
     from .models import DiffReport
     assert isinstance(report, DiffReport)
 
@@ -105,21 +107,46 @@ def _print_diff_report(report: object) -> None:
         click.secho("FAIL", fg="red", bold=True)
 
     if report.modified:
-        click.echo(f"\nModified files ({len(report.modified)}):")
+        click.secho(
+            f"\nModified files ({len(report.modified)})"
+            " — content differs between sdist and VCS:",
+            fg="red",
+        )
         for m in report.modified:
-            click.echo(f"  {m.path}")
+            click.secho(f"  {m.path}", fg="red")
 
     if report.added:
-        click.echo(f"\nFiles only in sdist ({len(report.added)}):")
+        click.secho(
+            f"\nUnexpected files in sdist ({len(report.added)})"
+            " — not found in VCS source:",
+            fg="red",
+        )
         for a in report.added:
-            click.echo(f"  + {a.path}")
+            click.secho(f"  + {a.path}", fg="red")
 
-    if report.removed:
-        click.echo(f"\nFiles only in VCS ({len(report.removed)}):")
-        for r in report.removed:
-            click.echo(f"  - {r.path}")
+    if details:
+        if report.removed:
+            click.secho(
+                f"\nFiles excluded from sdist ({len(report.removed)})"
+                " — present in VCS only:",
+                dim=True,
+            )
+            for r in report.removed:
+                click.secho(f"  - {r.path}", dim=True)
 
-    if report.generated:
-        click.echo(f"\nGenerated/ignored files ({len(report.generated)}):")
-        for g in report.generated:
-            click.echo(f"  ~ {g.path}")
+        if report.generated:
+            click.secho(
+                f"\nGenerated files ({len(report.generated)})"
+                " — expected build artifacts:",
+                dim=True,
+            )
+            for g in report.generated:
+                click.secho(f"  ~ {g.path}", dim=True)
+    else:
+        hidden = []
+        if report.removed:
+            hidden.append(f"{len(report.removed)} excluded")
+        if report.generated:
+            hidden.append(f"{len(report.generated)} generated")
+        if hidden:
+            click.echo(f"\nUse --details to show {' and '.join(hidden)} files.")

@@ -78,11 +78,30 @@ class TestDiffReport:
     def test_to_dict(self) -> None:
         report = DiffReport(
             added=[FileEntry(path="x.py", digest="aaa")],
-            removed=[],
-            modified=[],
-            generated=[],
+            removed=[FileEntry(path=".github/ci.yml", digest="bbb")],
+            modified=[
+                DiffResult(path="setup.py", sdist_digest="ccc", vcs_digest="ddd")
+            ],
+            generated=[FileEntry(path="PKG-INFO", digest="eee")],
         )
         d = report.to_dict()
         assert d["passed"] is False
-        assert len(d["added"]) == 1
+
+        assert "issues" in d
+        assert len(d["issues"]["unexpected"]) == 1
+        assert d["issues"]["unexpected"][0]["path"] == "x.py"
+        assert len(d["issues"]["modified"]) == 1
+        assert d["issues"]["modified"][0]["path"] == "setup.py"
+
+        assert "info" in d
+        assert len(d["info"]["excluded"]) == 1
+        assert d["info"]["excluded"][0]["path"] == ".github/ci.yml"
+        assert len(d["info"]["generated"]) == 1
+        assert d["info"]["generated"][0]["path"] == "PKG-INFO"
+
+        assert "added" not in d
+        assert "removed" not in d
+        assert "modified" not in d
+        assert "generated" not in d
+
         json.dumps(d)

@@ -41,10 +41,14 @@ class DiffReport:
     def to_dict(self) -> dict[str, Any]:
         return {
             "passed": self.passed,
-            "added": [f.to_dict() for f in self.added],
-            "removed": [f.to_dict() for f in self.removed],
-            "modified": [d.to_dict() for d in self.modified],
-            "generated": [f.to_dict() for f in self.generated],
+            "issues": {
+                "modified": [d.to_dict() for d in self.modified],
+                "unexpected": [f.to_dict() for f in self.added],
+            },
+            "info": {
+                "excluded": [f.to_dict() for f in self.removed],
+                "generated": [f.to_dict() for f in self.generated],
+            },
         }
 
 
