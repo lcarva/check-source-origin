@@ -28,7 +28,12 @@ class VerifyResult:
 
 def clone_repo(repo_url: str, ref: str, dest: Path) -> Path:
     subprocess.run(
-        ["git", "clone", "--depth", "1", "--branch", ref, repo_url, str(dest)],
+        ["git", "clone", repo_url, str(dest)],
+        check=True,
+        capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(dest), "checkout", ref],
         check=True,
         capture_output=True,
     )

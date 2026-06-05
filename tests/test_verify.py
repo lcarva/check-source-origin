@@ -1,10 +1,11 @@
+import subprocess
 import tarfile
 from io import BytesIO
 from pathlib import Path
 from unittest.mock import patch
 
 from check_source_origin.models import ResolveResult
-from check_source_origin.verify import run_verify
+from check_source_origin.verify import clone_repo, run_verify
 
 
 def _make_sdist_tarball(tmp_path: Path, files: dict[str, str]) -> Path:
@@ -38,6 +39,59 @@ _RESOLVE = ResolveResult(
     resolution_method="attestation",
     verified=True,
 )
+
+
+def _init_local_repo(path: Path, files: dict[str, str]) -> str:
+    """Create a local git repo with one commit and return its SHA."""
+    subprocess.run(["git", "init", str(path)], check=True, capture_output=True)
+    subprocess.run(
+        ["git", "-C", str(path), "config", "user.email", "test@test"],
+        check=True, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(path), "config", "user.name", "Test"],
+        check=True, capture_output=True,
+    )
+    for rel_path, content in files.items():
+        f = path / rel_path
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(content)
+    subprocess.run(
+        ["git", "-C", str(path), "add", "."], check=True, capture_output=True,
+    )
+    subprocess.run(
+        ["git", "-C", str(path), "commit", "-m", "init"],
+        check=True, capture_output=True,
+    )
+    result = subprocess.run(
+        ["git", "-C", str(path), "rev-parse", "HEAD"],
+        check=True, capture_output=True, text=True,
+    )
+    return result.stdout.strip()
+
+
+class TestCloneRepo:
+    def test_clone_by_tag(self, tmp_path: Path) -> None:
+        origin = tmp_path / "origin"
+        files = {"hello.txt": "world"}
+        _init_local_repo(origin, files)
+        subprocess.run(
+            ["git", "-C", str(origin), "tag", "v1.0"],
+            check=True, capture_output=True,
+        )
+        dest = tmp_path / "clone"
+        result = clone_repo(str(origin), "v1.0", dest)
+        assert (result / "hello.txt").read_text() == "world"
+        assert not (result / ".git").exists()
+
+    def test_clone_by_commit_sha(self, tmp_path: Path) -> None:
+        origin = tmp_path / "origin"
+        files = {"hello.txt": "world"}
+        sha = _init_local_repo(origin, files)
+        dest = tmp_path / "clone"
+        result = clone_repo(str(origin), sha, dest)
+        assert (result / "hello.txt").read_text() == "world"
+        assert not (result / ".git").exists()
 
 
 class TestRunVerify:
