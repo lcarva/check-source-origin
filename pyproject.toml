@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "check-source-origin"
+version = "0.1.0"
+description = "Verify that a published Python sdist matches its claimed VCS source"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.0",
+    "httpx>=0.27",
+]
+
+[project.scripts]
+check-source-origin = "check_source_origin.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/check_source_origin"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+src = ["src"]
+
+[tool.mypy]
+packages = ["check_source_origin"]
+mypy_path = "src"
+strict = true

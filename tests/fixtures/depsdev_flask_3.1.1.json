@@ -1,0 +1,89 @@
+{
+    "versionKey": {
+        "system": "PYPI",
+        "name": "flask",
+        "version": "3.1.1"
+    },
+    "purl": "pkg:pypi/flask@3.1.1",
+    "publishedAt": "2025-05-13T15:01:15Z",
+    "isDefault": false,
+    "isDeprecated": false,
+    "deprecatedReason": "",
+    "licenses": [
+        "BSD-3-Clause"
+    ],
+    "licenseDetails": [
+        {
+            "license": "BSD-3-Clause",
+            "spdx": "BSD-3-Clause"
+        }
+    ],
+    "advisoryKeys": [
+        {
+            "id": "GHSA-68rp-wp8r-4726"
+        }
+    ],
+    "links": [
+        {
+            "label": "DOCUMENTATION",
+            "url": "https://flask.palletsprojects.com/"
+        },
+        {
+            "label": "SOURCE_REPO",
+            "url": "https://github.com/pallets/flask"
+        },
+        {
+            "label": "ATTESTATION",
+            "url": "https://pypi.org/integrity/flask/3.1.1/flask-3.1.1-py3-none-any.whl/provenance"
+        }
+    ],
+    "slsaProvenances": [],
+    "attestations": [
+        {
+            "type": "https://docs.pypi.org/attestations/publish/v1",
+            "url": "https://pypi.org/integrity/flask/3.1.1/flask-3.1.1-py3-none-any.whl/provenance",
+            "verified": true,
+            "sourceRepository": "https://github.com/pallets/flask",
+            "commit": "7fff56f5172c48b6f3aedf17ee14ef5c2533dfd1"
+        }
+    ],
+    "registries": [
+        "https://pypi.org/simple"
+    ],
+    "relatedProjects": [
+        {
+            "projectKey": {
+                "id": "github.com/pallets/flask"
+            },
+            "relationProvenance": "UNVERIFIED_METADATA",
+            "relationType": "SOURCE_REPO"
+        },
+        {
+            "projectKey": {
+                "id": "github.com/pallets/flask"
+            },
+            "relationProvenance": "PYPI_PUBLISH_ATTESTATION",
+            "relationType": "SOURCE_REPO"
+        }
+    ],
+    "upstreamIdentifiers": [
+        {
+            "packageName": "flask",
+            "versionString": "3.1.1",
+            "source": "PYPI_RELEASE_FILENAME"
+        },
+        {
+            "packageName": "Flask",
+            "versionString": "3.1.1",
+            "source": "PYPI_METADATA_FILE"
+        }
+    ],
+    "cooldown": {
+        "end": "2025-05-13T15:01:15Z",
+        "description": ""
+    },
+    "projectStatus": {
+        "status": "active",
+        "reason": ""
+    }
+}
