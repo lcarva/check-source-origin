@@ -47,7 +47,8 @@ def resolve_source(name: str, version: str) -> ResolveResult:
         if metadata_repo and metadata_repo != repo_url:
             repo_url = metadata_repo
             github = GitHubClient()
-            commit = github.resolve_version_commit(repo_url, version)
+            result = github.resolve_version_commit(repo_url, version)
+            commit, repo_url = result.commit, result.repo_url
 
         return ResolveResult(
             repo_url=repo_url,
@@ -64,10 +65,10 @@ def resolve_source(name: str, version: str) -> ResolveResult:
         project = source_repos[0]
         repo_url = _repo_url_from_project_id(project["projectKey"]["id"])
         github = GitHubClient()
-        commit = github.resolve_version_commit(repo_url, version)
+        result = github.resolve_version_commit(repo_url, version)
         return ResolveResult(
-            repo_url=repo_url,
-            commit=commit,
+            repo_url=result.repo_url,
+            commit=result.commit,
             tag=None,
             resolution_method="related_project",
             verified=False,
@@ -78,10 +79,10 @@ def resolve_source(name: str, version: str) -> ResolveResult:
     if source_urls:
         repo_url = source_urls[0]
         github = GitHubClient()
-        commit = github.resolve_version_commit(repo_url, version)
+        result = github.resolve_version_commit(repo_url, version)
         return ResolveResult(
-            repo_url=repo_url,
-            commit=commit,
+            repo_url=result.repo_url,
+            commit=result.commit,
             tag=None,
             resolution_method="pypi_metadata",
             verified=False,
@@ -90,10 +91,10 @@ def resolve_source(name: str, version: str) -> ResolveResult:
     known_url = lookup_known_repo(name)
     if known_url:
         github = GitHubClient()
-        commit = github.resolve_version_commit(known_url, version)
+        result = github.resolve_version_commit(known_url, version)
         return ResolveResult(
-            repo_url=known_url,
-            commit=commit,
+            repo_url=result.repo_url,
+            commit=result.commit,
             tag=None,
             resolution_method="known_repos",
             verified=False,

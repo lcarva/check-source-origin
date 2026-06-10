@@ -257,6 +257,65 @@ class TestResolveSource:
             except Exception as e:
                 assert "could not resolve" in str(e).lower()
 
+    def test_follows_repo_redirect(self) -> None:
+        """When a repo was renamed, follow the GitHub redirect to find the tag."""
+        redirect_resp = httpx.Response(
+            301,
+            headers={
+                "location": "https://api.github.com/repositories/12345"
+            },
+            request=_FAKE_REQ,
+        )
+        repo_resp = httpx.Response(
+            200,
+            json={"full_name": "new-owner/pkg"},
+            request=_FAKE_REQ,
+            history=[redirect_resp],
+        )
+        github_ref_resp = httpx.Response(
+            200,
+            json={
+                "ref": "refs/tags/v1.0.0",
+                "object": {"sha": "dddd", "type": "commit"},
+            },
+            request=_FAKE_REQ,
+        )
+        depsdev_data = {
+            "versionKey": {
+                "system": "PYPI",
+                "name": "pkg",
+                "version": "1.0.0",
+            },
+            "attestations": [],
+            "relatedProjects": [
+                {
+                    "relationType": "SOURCE_REPO",
+                    "projectKey": {"id": "github.com/old-owner/pkg"},
+                }
+            ],
+            "links": [],
+        }
+
+        def mock_get(url: str, **kwargs):
+            full = str(url)
+            if "/repos/old-owner/pkg/git/ref/tags/" in full:
+                return httpx.Response(404, json={}, request=_FAKE_REQ)
+            if "/repos/new-owner/pkg/git/ref/tags/" in full:
+                return github_ref_resp
+            if "/repos/old-owner/pkg" in full and "/git/" not in full:
+                return repo_resp
+            if "/systems/pypi/" in full:
+                return httpx.Response(
+                    200, json=depsdev_data, request=_FAKE_REQ
+                )
+            return httpx.Response(404, json={}, request=_FAKE_REQ)
+
+        with patch.object(httpx.Client, "get", side_effect=mock_get):
+            result = resolve_source("pkg", "1.0.0")
+        assert result.commit == "dddd"
+        assert result.repo_url == "https://github.com/new-owner/pkg"
+        assert result.resolution_method == "related_project"
+
     def test_raises_when_nothing_found(self) -> None:
         empty_depsdev = {
             "versionKey": {"system": "PYPI", "name": "x", "version": "0"},
