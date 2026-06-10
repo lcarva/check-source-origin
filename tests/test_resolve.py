@@ -191,6 +191,72 @@ class TestResolveSource:
         assert result.commit == "bbbb"
         assert result.verified is False
 
+    def test_known_repos_fallback(self) -> None:
+        """When all methods fail but the package is in KNOWN_REPOS, use it."""
+        empty_depsdev = {
+            "versionKey": {"system": "PYPI", "name": "adlfs", "version": "1.0"},
+            "attestations": [],
+            "relatedProjects": [],
+            "links": [],
+        }
+        empty_pypi = {
+            "info": {"name": "adlfs", "project_urls": None, "home_page": None},
+            "urls": [],
+        }
+        github_ref_resp = httpx.Response(
+            200,
+            json={
+                "ref": "refs/tags/v1.0",
+                "object": {"sha": "cccc", "type": "commit"},
+            },
+            request=_FAKE_REQ,
+        )
+
+        def mock_get(url: str, **kwargs):
+            full = str(url)
+            if "/git/ref/tags/" in full:
+                return github_ref_resp
+            if "/systems/pypi/" in full:
+                return httpx.Response(200, json=empty_depsdev, request=_FAKE_REQ)
+            if "/pypi/" in full:
+                return httpx.Response(200, json=empty_pypi, request=_FAKE_REQ)
+            return httpx.Response(404, json={}, request=_FAKE_REQ)
+
+        with patch.object(httpx.Client, "get", side_effect=mock_get):
+            result = resolve_source("adlfs", "1.0")
+        assert result.resolution_method == "known_repos"
+        assert result.repo_url == "https://github.com/fsspec/adlfs"
+        assert result.commit == "cccc"
+        assert result.verified is False
+
+    def test_known_repos_skipped_when_not_in_db(self) -> None:
+        """Unknown packages still raise ResolveError."""
+        empty_depsdev = {
+            "versionKey": {"system": "PYPI", "name": "x", "version": "0"},
+            "attestations": [],
+            "relatedProjects": [],
+            "links": [],
+        }
+        empty_pypi = {
+            "info": {"name": "x", "project_urls": None, "home_page": None},
+            "urls": [],
+        }
+
+        def mock_get(url: str, **kwargs):
+            full = str(url)
+            if "/systems/pypi/" in full:
+                return httpx.Response(200, json=empty_depsdev, request=_FAKE_REQ)
+            if "/pypi/" in full:
+                return httpx.Response(200, json=empty_pypi, request=_FAKE_REQ)
+            return httpx.Response(404, json={}, request=_FAKE_REQ)
+
+        with patch.object(httpx.Client, "get", side_effect=mock_get):
+            try:
+                resolve_source("unknown-pkg-xyz", "0.0.1")
+                assert False, "Should have raised"
+            except Exception as e:
+                assert "could not resolve" in str(e).lower()
+
     def test_raises_when_nothing_found(self) -> None:
         empty_depsdev = {
             "versionKey": {"system": "PYPI", "name": "x", "version": "0"},

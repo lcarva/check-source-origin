@@ -4,6 +4,7 @@ from typing import Any
 
 from .depsdev import DepsDevClient
 from .github import GitHubClient
+from .known_repos import lookup as lookup_known_repo
 from .models import ResolveResult
 from .pypi import PyPIClient
 
@@ -83,6 +84,18 @@ def resolve_source(name: str, version: str) -> ResolveResult:
             commit=commit,
             tag=None,
             resolution_method="pypi_metadata",
+            verified=False,
+        )
+
+    known_url = lookup_known_repo(name)
+    if known_url:
+        github = GitHubClient()
+        commit = github.resolve_version_commit(known_url, version)
+        return ResolveResult(
+            repo_url=known_url,
+            commit=commit,
+            tag=None,
+            resolution_method="known_repos",
             verified=False,
         )
 
