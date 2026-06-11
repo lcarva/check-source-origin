@@ -1,6 +1,11 @@
 from unittest.mock import patch
 
+import httpx
+import pytest
+
 from check_source_origin.github import GitHubClient
+
+_FAKE_REQ = httpx.Request("GET", "https://fake")
 
 
 class TestGitHubClientAuth:
@@ -26,3 +31,62 @@ class TestGitHubClientAuth:
         with patch.dict("os.environ", {}, clear=True):
             client = GitHubClient()
         assert "Authorization" not in client._client.headers
+
+
+class TestResolveTagCommit:
+    def test_returns_none_on_404(self) -> None:
+        resp = httpx.Response(404, json={}, request=_FAKE_REQ)
+        with patch.dict("os.environ", {}, clear=True):
+            client = GitHubClient()
+        with patch.object(httpx.Client, "get", return_value=resp):
+            assert client.resolve_tag_commit("owner", "repo", "v1.0") is None
+
+    def test_raises_on_403(self) -> None:
+        resp = httpx.Response(403, json={"message": "rate limit"}, request=_FAKE_REQ)
+        with patch.dict("os.environ", {}, clear=True):
+            client = GitHubClient()
+        with patch.object(httpx.Client, "get", return_value=resp):
+            with pytest.raises(httpx.HTTPStatusError):
+                client.resolve_tag_commit("owner", "repo", "v1.0")
+
+    def test_raises_on_500(self) -> None:
+        resp = httpx.Response(500, json={}, request=_FAKE_REQ)
+        with patch.dict("os.environ", {}, clear=True):
+            client = GitHubClient()
+        with patch.object(httpx.Client, "get", return_value=resp):
+            with pytest.raises(httpx.HTTPStatusError):
+                client.resolve_tag_commit("owner", "repo", "v1.0")
+
+
+class TestDereferenceTag:
+    def test_returns_none_on_404(self) -> None:
+        resp = httpx.Response(404, json={}, request=_FAKE_REQ)
+        with patch.dict("os.environ", {}, clear=True):
+            client = GitHubClient()
+        with patch.object(httpx.Client, "get", return_value=resp):
+            assert client._dereference_tag("owner", "repo", "abc123") is None
+
+    def test_raises_on_403(self) -> None:
+        resp = httpx.Response(403, json={"message": "forbidden"}, request=_FAKE_REQ)
+        with patch.dict("os.environ", {}, clear=True):
+            client = GitHubClient()
+        with patch.object(httpx.Client, "get", return_value=resp):
+            with pytest.raises(httpx.HTTPStatusError):
+                client._dereference_tag("owner", "repo", "abc123")
+
+
+class TestResolveRedirect:
+    def test_returns_none_on_404(self) -> None:
+        resp = httpx.Response(404, json={}, request=_FAKE_REQ)
+        with patch.dict("os.environ", {}, clear=True):
+            client = GitHubClient()
+        with patch.object(httpx.Client, "get", return_value=resp):
+            assert client._resolve_redirect("owner", "repo") is None
+
+    def test_raises_on_403(self) -> None:
+        resp = httpx.Response(403, json={"message": "forbidden"}, request=_FAKE_REQ)
+        with patch.dict("os.environ", {}, clear=True):
+            client = GitHubClient()
+        with patch.object(httpx.Client, "get", return_value=resp):
+            with pytest.raises(httpx.HTTPStatusError):
+                client._resolve_redirect("owner", "repo")

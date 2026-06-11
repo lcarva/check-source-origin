@@ -30,8 +30,9 @@ class GitHubClient:
         self, owner: str, repo: str, tag: str
     ) -> str | None:
         resp = self._client.get(f"/repos/{owner}/{repo}/git/ref/tags/{tag}")
-        if resp.status_code != 200:
+        if resp.status_code == 404:
             return None
+        resp.raise_for_status()
         data: dict[str, Any] = resp.json()
         obj = data.get("object", {})
         if obj.get("type") == "commit":
@@ -46,8 +47,9 @@ class GitHubClient:
         resp = self._client.get(
             f"/repos/{owner}/{repo}/git/tags/{tag_sha}"
         )
-        if resp.status_code != 200:
+        if resp.status_code == 404:
             return None
+        resp.raise_for_status()
         data: dict[str, Any] = resp.json()
         obj = data.get("object", {})
         if obj.get("type") == "commit":
@@ -60,8 +62,9 @@ class GitHubClient:
         resp = self._client.get(
             f"/repos/{owner}/{repo}", follow_redirects=True
         )
-        if resp.status_code != 200:
+        if resp.status_code == 404:
             return None
+        resp.raise_for_status()
         if not resp.history:
             return None
         full_name = resp.json().get("full_name", "")
