@@ -4,6 +4,7 @@ from click.testing import CliRunner
 
 from check_source_origin.cli import _print_diff_report, main
 from check_source_origin.models import DiffReport, DiffResult, FileEntry
+from check_source_origin.resolve import ResolveError
 
 
 class TestPrintDiffReport:
@@ -187,3 +188,31 @@ class TestCLI:
         assert "--ref" in result.output
         assert "--show-diff" in result.output
         assert "--subdir" in result.output
+
+
+class TestErrorHandling:
+    def test_resolve_error_shows_message_without_traceback(self) -> None:
+        from unittest.mock import patch
+
+        runner = CliRunner()
+        with patch(
+            "check_source_origin.cli.resolve_source",
+            side_effect=ResolveError("could not resolve foo 1.0"),
+        ):
+            result = runner.invoke(main, ["resolve", "foo", "1.0"])
+        assert result.exit_code == 1
+        assert "Error: could not resolve foo 1.0" in result.output
+        assert "Traceback" not in result.output
+
+    def test_resolve_error_in_verify(self) -> None:
+        from unittest.mock import patch
+
+        runner = CliRunner()
+        with patch(
+            "check_source_origin.cli.run_verify",
+            side_effect=ResolveError("no source found"),
+        ):
+            result = runner.invoke(main, ["verify", "foo", "1.0"])
+        assert result.exit_code == 1
+        assert "Error: no source found" in result.output
+        assert "Traceback" not in result.output

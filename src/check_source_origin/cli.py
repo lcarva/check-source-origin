@@ -8,11 +8,20 @@ import click
 
 from .diff import compare_trees
 from .generated import detect_generated_files
-from .resolve import resolve_source
+from .resolve import ResolveError, resolve_source
 from .verify import clone_repo, extract_sdist, fetch_sdist, run_verify
 
 
-@click.group()
+class _CLI(click.Group):
+    def invoke(self, ctx: click.Context) -> None:
+        try:
+            super().invoke(ctx)
+        except ResolveError as e:
+            click.echo(f"Error: {e}", err=True)
+            ctx.exit(1)
+
+
+@click.group(cls=_CLI)
 def main() -> None:
     """Verify that a published Python sdist matches its claimed VCS source."""
 
