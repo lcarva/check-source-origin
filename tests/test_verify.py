@@ -197,6 +197,24 @@ class TestRunVerify:
         assert result.diff_report.passed is False
         assert any("backdoor" in f.path for f in result.diff_report.added)
 
+    def test_result_has_roots_with_tmp_dir(self, tmp_path: Path) -> None:
+        source_files = {"src/main.py": "print('hello')"}
+        sdist = _make_sdist_tarball(tmp_path, source_files)
+        repo = _make_git_repo(tmp_path, source_files)
+        work = tmp_path / "work"
+        work.mkdir()
+        with (
+            patch("check_source_origin.verify.resolve_source", return_value=_RESOLVE),
+            patch("check_source_origin.verify.clone_repo", return_value=repo),
+        ):
+            result = run_verify("pkg", "1.0", sdist_path=sdist, tmp_dir=work)
+
+        assert result.sdist_root is not None
+        assert result.vcs_root is not None
+        assert result.sdist_root.exists()
+        assert result.vcs_root.exists()
+        assert result.diff_report.passed is True
+
     def test_to_dict_serializable(self, tmp_path: Path) -> None:
         source_files = {"main.py": "x"}
         sdist = _make_sdist_tarball(tmp_path, source_files)

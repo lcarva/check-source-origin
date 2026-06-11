@@ -53,7 +53,8 @@ def download(name: str, version: str, output: Path | None) -> None:
 @click.option("--json-output", "use_json", is_flag=True, help="Output as JSON")
 @click.option("--ignore", multiple=True, help="Extra glob patterns to treat as generated")
 @click.option("--details", is_flag=True, help="Show excluded and generated files")
-def diff(sdist: Path, repo: str, ref: str, use_json: bool, ignore: tuple[str, ...], details: bool) -> None:
+@click.option("--show-diff", is_flag=True, help="Show actual file diffs for modified files")
+def diff(sdist: Path, repo: str, ref: str, use_json: bool, ignore: tuple[str, ...], details: bool, show_diff: bool) -> None:
     """Compare an sdist tarball against a VCS checkout."""
     import tempfile
 
@@ -65,10 +66,13 @@ def diff(sdist: Path, repo: str, ref: str, use_json: bool, ignore: tuple[str, ..
         all_ignore = list(ignore) + auto_generated
         report = compare_trees(sdist_root, repo_dir, extra_ignore=all_ignore or None)
 
-    if use_json:
-        click.echo(json.dumps(report.to_dict(), indent=2))
-    else:
-        _print_diff_report(report, details=details)
+        if use_json:
+            click.echo(json.dumps(report.to_dict(), indent=2))
+        else:
+            _print_diff_report(
+                report, details=details, show_diff=show_diff,
+                sdist_root=sdist_root, vcs_root=repo_dir,
+            )
 
     if not report.passed:
         sys.exit(1)
@@ -81,26 +85,59 @@ def diff(sdist: Path, repo: str, ref: str, use_json: bool, ignore: tuple[str, ..
 @click.option("--sdist", "sdist_path", type=click.Path(exists=True, path_type=Path), default=None,
               help="Use a pre-downloaded sdist instead of fetching from PyPI")
 @click.option("--details", is_flag=True, help="Show excluded and generated files")
-def verify(name: str, version: str, use_json: bool, sdist_path: Path | None, details: bool) -> None:
+@click.option("--show-diff", is_flag=True, help="Show actual file diffs for modified files")
+def verify(name: str, version: str, use_json: bool, sdist_path: Path | None, details: bool, show_diff: bool) -> None:
     """Full pipeline: resolve, download, and diff a package against its source."""
-    result = run_verify(name, version, sdist_path=sdist_path)
+    import tempfile
 
-    if use_json:
-        click.echo(json.dumps(result.to_dict(), indent=2))
-    else:
-        r = result.resolve_result
-        click.echo(f"Repository: {r.repo_url}")
-        click.echo(f"Commit:     {r.commit or '(unknown)'}")
-        click.echo(f"Method:     {r.resolution_method}")
-        click.echo(f"Verified:   {r.verified}")
-        click.echo()
-        _print_diff_report(result.diff_report, details=details)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        result = run_verify(name, version, sdist_path=sdist_path, tmp_dir=Path(tmpdir))
+
+        if use_json:
+            click.echo(json.dumps(result.to_dict(), indent=2))
+        else:
+            r = result.resolve_result
+            click.echo(f"Repository: {r.repo_url}")
+            click.echo(f"Commit:     {r.commit or '(unknown)'}")
+            click.echo(f"Method:     {r.resolution_method}")
+            click.echo(f"Verified:   {r.verified}")
+            click.echo()
+            _print_diff_report(
+                result.diff_report, details=details, show_diff=show_diff,
+                sdist_root=result.sdist_root, vcs_root=result.vcs_root,
+            )
 
     if not result.diff_report.passed:
         sys.exit(1)
 
 
-def _print_diff_report(report: object, *, details: bool = False) -> None:
+def _show_file_diff(vcs_root: Path, sdist_root: Path, rel_path: str) -> None:
+    import difflib
+
+    try:
+        vcs_lines = (vcs_root / rel_path).read_text().splitlines(keepends=True)
+        sdist_lines = (sdist_root / rel_path).read_text().splitlines(keepends=True)
+    except (UnicodeDecodeError, OSError):
+        click.echo("    Binary or unreadable file")
+        return
+
+    diff = difflib.unified_diff(
+        sdist_lines, vcs_lines,
+        fromfile=f"sdist/{rel_path}",
+        tofile=f"vcs/{rel_path}",
+    )
+    for line in diff:
+        click.echo(f"    {line.rstrip(chr(10))}")
+
+
+def _print_diff_report(
+    report: object,
+    *,
+    details: bool = False,
+    show_diff: bool = False,
+    sdist_root: Path | None = None,
+    vcs_root: Path | None = None,
+) -> None:
     from .models import DiffReport
     assert isinstance(report, DiffReport)
 
@@ -117,6 +154,8 @@ def _print_diff_report(report: object, *, details: bool = False) -> None:
         )
         for m in report.modified:
             click.secho(f"  {m.path}", fg="red")
+            if show_diff and sdist_root is not None and vcs_root is not None:
+                _show_file_diff(vcs_root, sdist_root, m.path)
 
     if report.added:
         click.secho(

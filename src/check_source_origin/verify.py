@@ -19,6 +19,8 @@ from .resolve import resolve_source
 class VerifyResult:
     resolve_result: ResolveResult
     diff_report: DiffReport
+    sdist_root: Path | None = None
+    vcs_root: Path | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -86,19 +88,36 @@ def run_verify(
     version: str,
     work_dir: Path | None = None,
     sdist_path: Path | None = None,
+    *,
+    tmp_dir: Path | None = None,
 ) -> VerifyResult:
     resolved = resolve_source(name, version)
     ref = resolved.commit or resolved.tag or version
 
+    if tmp_dir is not None:
+        return _do_verify(resolved, name, version, ref, tmp_dir, sdist_path)
+
     with tempfile.TemporaryDirectory(dir=work_dir) as tmpdir:
-        tmp = Path(tmpdir)
+        return _do_verify(resolved, name, version, ref, Path(tmpdir), sdist_path)
 
-        if sdist_path is None:
-            sdist_path = fetch_sdist(name, version, tmp / f"{name}-{version}.tar.gz")
 
-        sdist_root = extract_sdist(sdist_path, tmp / "sdist")
-        repo_dir = clone_repo(resolved.repo_url, ref, tmp / "repo")
-        auto_generated = detect_generated_files(repo_dir)
-        report = compare_trees(sdist_root, repo_dir, extra_ignore=auto_generated or None)
+def _do_verify(
+    resolved: ResolveResult,
+    name: str,
+    version: str,
+    ref: str,
+    tmp: Path,
+    sdist_path: Path | None,
+) -> VerifyResult:
+    if sdist_path is None:
+        sdist_path = fetch_sdist(name, version, tmp / f"{name}-{version}.tar.gz")
 
-    return VerifyResult(resolve_result=resolved, diff_report=report)
+    sdist_root = extract_sdist(sdist_path, tmp / "sdist")
+    repo_dir = clone_repo(resolved.repo_url, ref, tmp / "repo")
+    auto_generated = detect_generated_files(repo_dir)
+    report = compare_trees(sdist_root, repo_dir, extra_ignore=auto_generated or None)
+
+    return VerifyResult(
+        resolve_result=resolved, diff_report=report,
+        sdist_root=sdist_root, vcs_root=repo_dir,
+    )

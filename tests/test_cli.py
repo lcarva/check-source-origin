@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from click.testing import CliRunner
 
 from check_source_origin.cli import _print_diff_report, main
@@ -73,16 +75,81 @@ class TestPrintDiffReport:
         assert "Unexpected" not in output
 
 
-def _invoke_print(report: DiffReport, details: bool) -> str:
+def _invoke_print(
+    report: DiffReport,
+    details: bool,
+    *,
+    show_diff: bool = False,
+    sdist_root: Path | None = None,
+    vcs_root: Path | None = None,
+) -> str:
     runner = CliRunner()
     import click
 
     @click.command()
     def _cmd() -> None:
-        _print_diff_report(report, details=details)
+        _print_diff_report(
+            report,
+            details=details,
+            show_diff=show_diff,
+            sdist_root=sdist_root,
+            vcs_root=vcs_root,
+        )
 
     result = runner.invoke(_cmd, catch_exceptions=False)
     return result.output
+
+
+class TestShowDiff:
+    def test_show_diff_displays_unified_diff(self, tmp_path: Path) -> None:
+        sdist_root = tmp_path / "sdist"
+        vcs_root = tmp_path / "vcs"
+        sdist_root.mkdir()
+        vcs_root.mkdir()
+        (sdist_root / "setup.py").write_text("version = '2.0'\n")
+        (vcs_root / "setup.py").write_text("version = '1.0'\n")
+
+        report = DiffReport(
+            modified=[DiffResult(path="setup.py", sdist_digest="ddd", vcs_digest="eee")],
+        )
+        output = _invoke_print(
+            report, details=False, show_diff=True, sdist_root=sdist_root, vcs_root=vcs_root
+        )
+        assert "--- sdist/setup.py" in output
+        assert "+++ vcs/setup.py" in output
+        assert "-version = '2.0'" in output
+        assert "+version = '1.0'" in output
+
+    def test_show_diff_not_shown_by_default(self, tmp_path: Path) -> None:
+        sdist_root = tmp_path / "sdist"
+        vcs_root = tmp_path / "vcs"
+        sdist_root.mkdir()
+        vcs_root.mkdir()
+        (sdist_root / "setup.py").write_text("version = '2.0'\n")
+        (vcs_root / "setup.py").write_text("version = '1.0'\n")
+
+        report = DiffReport(
+            modified=[DiffResult(path="setup.py", sdist_digest="ddd", vcs_digest="eee")],
+        )
+        output = _invoke_print(report, details=False)
+        assert "--- sdist/setup.py" not in output
+        assert "+version = '1.0'" not in output
+
+    def test_show_diff_binary_file(self, tmp_path: Path) -> None:
+        sdist_root = tmp_path / "sdist"
+        vcs_root = tmp_path / "vcs"
+        sdist_root.mkdir()
+        vcs_root.mkdir()
+        (sdist_root / "image.bin").write_bytes(b"\x80\x81\x82")
+        (vcs_root / "image.bin").write_bytes(b"\x90\x91\x92")
+
+        report = DiffReport(
+            modified=[DiffResult(path="image.bin", sdist_digest="ddd", vcs_digest="eee")],
+        )
+        output = _invoke_print(
+            report, details=False, show_diff=True, sdist_root=sdist_root, vcs_root=vcs_root
+        )
+        assert "Binary" in output
 
 
 class TestCLI:
@@ -106,9 +173,16 @@ class TestCLI:
         assert result.exit_code == 0
         assert "NAME" in result.output
 
+    def test_verify_help(self) -> None:
+        runner = CliRunner()
+        result = runner.invoke(main, ["verify", "--help"])
+        assert result.exit_code == 0
+        assert "--show-diff" in result.output
+
     def test_diff_help(self) -> None:
         runner = CliRunner()
         result = runner.invoke(main, ["diff", "--help"])
         assert result.exit_code == 0
         assert "--repo" in result.output
         assert "--ref" in result.output
+        assert "--show-diff" in result.output
